@@ -1,0 +1,2 @@
+# GitHub SSH Security Group Updater
+This project automates updating AWS Security Group rules for SSH access based on GitHub Actions' dynamic IP ranges. Infrastructure is provisioned with Terraform and the update logic runs in AWS Lambda. 
