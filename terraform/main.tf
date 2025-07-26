@@ -11,15 +11,14 @@ resource "aws_lambda_function" "update_github_ips" {
 
   environment {
     variables = {
-      SECURITY_GROUP_ID = var.security_group_id
       AWS_REGION        = var.aws_region
       SSH_PORT          = tostring(var.ssh_port)
-      DESCRIPTION_TAG   = "GitHubActions"
+      DESCRIPTION_TAG   = "github-ssh-sg-updater"
     }
   }
   
    tags = {
-    Name        = "github-ssh-sg-updater-lambda-role"
+    Name        = "github-ssh-sg-updater"
   }
 }
 
@@ -29,7 +28,7 @@ resource "aws_iam_role" "lambda_exec" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role_policy.json
 
   tags = {
-    Name        = "github-ssh-sg-updater-lambda-role"
+    Name        = "github-ssh-sg-updater"
   }
 }
 
@@ -43,28 +42,33 @@ data "aws_iam_policy_document" "lambda_assume_role_policy" {
   }
 }
 
-# --- IAM Policy for Lambda to update Security Group ---
-resource "aws_iam_policy" "lambda_sg_update" {
-  name        = "github-ssh-sg-updater-policy"
-  description = "Allow Lambda to update Security Group ingress rules."
-  policy      = data.aws_iam_policy_document.lambda_sg_update.json
-}
+# --- IAM Policy for Lambda to update Bastion IP tables ---
+resource "aws_iam_policy" "lambda_ssm_policy" {
+  name = "lambda-ssm-policy"
 
-data "aws_iam_policy_document" "lambda_sg_update" {
-  statement {
-    actions = [
-      "ec2:DescribeSecurityGroups",
-      "ec2:AuthorizeSecurityGroupIngress",
-      "ec2:RevokeSecurityGroupIngress"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ssm:SendCommand"
+        ],
+        Resource = [
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"
+        ]
+      }
     ]
-    resources = ["arn:aws:ec2:${var.aws_region}:*:security-group/${var.security_group_id}"]
-  }
+  })
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_sg_update_attach" {
-  role       = aws_iam_role.lambda_exec.name
-  policy_arn = aws_iam_policy.lambda_sg_update.arn
+resource "aws_iam_role_policy_attachment" "lambda_ssm_attach" {
+  role       = aws_iam_role.lambda_ssm_role.name
+  policy_arn = aws_iam_policy.lambda_ssm_policy.arn
 }
+
+
 
 # --- IAM Policy for Lambda basic execution ---
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
@@ -91,3 +95,69 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily.arn
 } 
+
+# --- Bastion Host Setup ---
+resource "aws_key_pair" "bastion_key" {
+  key_name   = "bastion-key"
+  public_key = file("~/.ssh/id_rsa.pub")
+}
+
+resource "aws_security_group" "bastion_sg" {
+  name        = "bastion-sg"
+  description = "Allow SSH from anywhere (filtered by iptables)"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "bastion-sg"
+  }
+}
+# --- IAM Role for Bastion SSM access ---
+resource "aws_iam_role" "bastion_ssm_role" {
+  name = "bastion-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_ssm_core" {
+  role       = aws_iam_role.bastion_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+
+# --- Bastion Instance ---
+resource "aws_instance" "bastion" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+  subnet_id     = data.aws_subnet.default_subnet.id
+  key_name      = aws_key_pair.bastion_key.key_name
+  security_groups = [aws_security_group.bastion_sg.id]
+
+  tags = {
+    Name = "bastion-host"
+  }
+}

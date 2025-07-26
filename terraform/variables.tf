@@ -5,14 +5,19 @@ variable "aws_region" {
   default     = "eu-west-3"
 }
 
-variable "security_group_id" {
-  description = "ID of the existing Security Group to update for SSH access."
-  type        = string
-}
-
 variable "ssh_port" {
   description = "Port to allow for SSH access (default 22)."
   type        = number
   default     = 22
 }
 
+variable "ami_id" {
+  description = "AMI ID for the bastion instance"
+  type        = string
+}
+
+variable "instance_type" {
+  description = "Instance type for the bastion"
+  type        = string
+  default     = "t3.micro"
+}

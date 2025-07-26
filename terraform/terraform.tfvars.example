@@ -1,0 +1,6 @@
+# Example Terraform variable values for github-ssh-sg-updater
+# Copy this file to terraform.tfvars and update with your real values
+
+ami_id        = "ami-0c02fb55956c7d316"  # Amazon Linux 2 in eu-west-3
+instance_type = "t3.micro"
+region        = "eu-west-3"

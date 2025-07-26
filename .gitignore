@@ -1,0 +1,2 @@
+# Ignore Terraform variable files with sensitive/environment-specific data
+terraform/terraform.tfvars 

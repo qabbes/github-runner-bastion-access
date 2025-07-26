@@ -16,3 +16,10 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnet" "default_subnet" {
+  default_for_az = true
+}
