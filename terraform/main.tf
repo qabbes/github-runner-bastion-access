@@ -1,7 +1,9 @@
+# --- AWS Account Info for dynamic ARNs ---
+data "aws_caller_identity" "current" {}
 
 # --- Lambda Function ---
 resource "aws_lambda_function" "update_github_ips" {
-  function_name = "github-ssh-sg-updater"
+  function_name = "gha-bastion-access"
   role          = aws_iam_role.lambda_exec.arn
   handler       = "main.lambda_handler"
   runtime       = "python3.12"
@@ -11,24 +13,24 @@ resource "aws_lambda_function" "update_github_ips" {
 
   environment {
     variables = {
-      AWS_REGION        = var.aws_region
-      SSH_PORT          = tostring(var.ssh_port)
-      DESCRIPTION_TAG   = "github-ssh-sg-updater"
+      AWS_REGION      = var.aws_region
+      SSH_PORT        = tostring(var.ssh_port)
+      DESCRIPTION_TAG = "gha-bastion-access"
     }
   }
-  
-   tags = {
-    Name        = "github-ssh-sg-updater"
+
+  tags = {
+    Name = "gha-bastion-access"
   }
 }
 
 # --- IAM Role for Lambda ---
 resource "aws_iam_role" "lambda_exec" {
-  name = "github-ssh-sg-updater-lambda-role"
+  name               = "gha-bastion-access-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role_policy.json
 
   tags = {
-    Name        = "github-ssh-sg-updater"
+    Name = "gha-bastion-access"
   }
 }
 
@@ -64,7 +66,7 @@ resource "aws_iam_policy" "lambda_ssm_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_ssm_attach" {
-  role       = aws_iam_role.lambda_ssm_role.name
+  role       = aws_iam_role.lambda_exec.name
   policy_arn = aws_iam_policy.lambda_ssm_policy.arn
 }
 
@@ -78,7 +80,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 
 # --- EventBridge Rule (Daily Trigger) ---
 resource "aws_cloudwatch_event_rule" "daily" {
-  name                = "github-ssh-sg-updater-daily"
+  name                = "gha-bastion-access-daily"
   schedule_expression = "rate(1 day)"
 }
 
@@ -94,7 +96,7 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   function_name = aws_lambda_function.update_github_ips.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily.arn
-} 
+}
 
 # --- Bastion Host Setup ---
 resource "aws_key_pair" "bastion_key" {
@@ -151,10 +153,10 @@ resource "aws_iam_role_policy_attachment" "bastion_ssm_core" {
 
 # --- Bastion Instance ---
 resource "aws_instance" "bastion" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  subnet_id     = data.aws_subnet.default_subnet.id
-  key_name      = aws_key_pair.bastion_key.key_name
+  ami             = var.ami_id
+  instance_type   = var.instance_type
+  subnet_id       = data.aws_subnet.default_subnet.id
+  key_name        = aws_key_pair.bastion_key.key_name
   security_groups = [aws_security_group.bastion_sg.id]
 
   tags = {

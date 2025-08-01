@@ -1,5 +1,13 @@
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.11.0"
+
+  backend "s3" {
+    bucket       = "gha-bastion-access-state-bucket-qabbes"
+    key          = "global/terraform.tfstate"
+    region       = "eu-west-3"
+    encrypt      = true
+    use_lockfile = true
+  }
 
   required_providers {
     aws = {

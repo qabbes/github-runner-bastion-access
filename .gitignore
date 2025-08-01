@@ -1,2 +1,14 @@
-# Ignore Terraform variable files with sensitive/environment-specific data
-terraform/terraform.tfvars 
+# Terraform files
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate.*
+crash.log
+terraform.tfvars
+*.pem
+
+# Lambda files
+*.zip
+
+# Logs
+.env
