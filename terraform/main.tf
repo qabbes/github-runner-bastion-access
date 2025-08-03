@@ -106,12 +106,20 @@ resource "aws_key_pair" "bastion_key" {
 
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
-  description = "Allow SSH from anywhere (filtered by iptables)"
+  description = "Allow SSH from anywhere (filtered by iptables) and SSM connections"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
     from_port   = 22
     to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS for SSM connections"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
