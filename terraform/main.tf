@@ -54,6 +54,13 @@ resource "aws_iam_policy" "lambda_ssm_policy" {
       {
         Effect = "Allow",
         Action = [
+          "ec2:DescribeInstances"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
           "ssm:SendCommand"
         ],
         Resource = [
