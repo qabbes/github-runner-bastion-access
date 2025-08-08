@@ -4,7 +4,7 @@
 yum update -y
 
 # Install required packages
-yum install -y amazon-ssm-agent iptables-services
+yum install -y amazon-ssm-agent iptables-services ipset
 
 # Enable and start SSM agent
 systemctl enable amazon-ssm-agent
@@ -21,15 +21,21 @@ EOF
 # Make the script executable
 chmod +x ${script_directory}/${script_name}
 
-# Enable iptables service to persist rules
+# Enable iptables and ipset services to persist rules
 systemctl enable iptables
 systemctl start iptables
+systemctl enable ipset
+systemctl start ipset
+
+# Create initial empty ipset for GitHub Actions IPs
+ipset create gha-ips hash:net -exist
 
 # Allow established connections and localhost (basic security)
 iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -i lo -j ACCEPT
 
-# Save iptables rules
+# Save iptables and ipset rules
 service iptables save
+ipset save gha-ips > /etc/sysconfig/ipset
 
 echo "Bastion host setup completed successfully" >> /var/log/user-data.log
