@@ -5,7 +5,7 @@ data "aws_caller_identity" "current" {}
 resource "aws_lambda_function" "update_github_ips" {
   function_name = "gha-bastion-access"
   role          = aws_iam_role.lambda_exec.arn
-  handler       = "main.lambda_handler"
+  handler       = "ssh_updater_lambda.lambda_handler"
   runtime       = "python3.12"
 
   filename         = "../lambda/lambda.zip"
@@ -13,9 +13,10 @@ resource "aws_lambda_function" "update_github_ips" {
 
   environment {
     variables = {
-      AWS_REGION      = var.aws_region
-      SSH_PORT        = tostring(var.ssh_port)
-      DESCRIPTION_TAG = "gha-bastion-access"
+      AWS_REGION           = var.aws_region
+      DESCRIPTION_TAG      = "gha-bastion-access"
+      SCRIPT_PATH          = "${var.script_directory}/${var.update_iptables_script_name}"
+      GITHUB_META_API_URL  = var.github_meta_api_url
     }
   }
 
@@ -165,16 +166,28 @@ resource "aws_iam_role_policy_attachment" "bastion_ssm_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# --- IAM Instance Profile for Bastion ---
+resource "aws_iam_instance_profile" "bastion_profile" {
+  name = "bastion-ssm-profile"
+  role = aws_iam_role.bastion_ssm_role.name
+}
 
 # --- Bastion Instance ---
 resource "aws_instance" "bastion" {
-  ami             = var.ami_id
-  instance_type   = var.instance_type
-  subnet_id       = data.aws_subnet.default_subnet.id
-  key_name        = aws_key_pair.bastion_key.key_name
-  security_groups = [aws_security_group.bastion_sg.id]
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  subnet_id              = data.aws_subnet.default_subnet.id
+  key_name               = aws_key_pair.bastion_key.key_name
+  security_groups        = [aws_security_group.bastion_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.bastion_profile.name
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    update_iptables_script = file("${path.module}/../scripts/update_iptables.sh")
+    script_directory = var.script_directory
+    script_name = var.update_iptables_script_name
+  }))
 
   tags = {
-    Name = "bastion-host"
+    Name = "gha-bastion-access"
   }
 }
